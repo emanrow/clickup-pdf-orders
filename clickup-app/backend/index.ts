@@ -59,14 +59,8 @@ const getTitleOrderTasks: RequestHandler = async (_req, res) => {
     const listId = process.env.TITLEORDER_LIST_ID;
 
     try {
-        const tasksResponse = await axios.get(
-            `https://api.clickup.com/api/v2/list/${listId}/task`,
-            {
-                headers: { Authorization: accessToken },
-            }
-        );
-
-        res.json(tasksResponse.data.tasks);
+        const tasksResponse = await clickupGet(`/list/${listId}/task`);
+        res.json(tasksResponse.tasks);
     } catch (error: unknown) {
         if (error instanceof Error) {
             console.error('ClickUp API error:', error.message);
@@ -79,6 +73,50 @@ const getTitleOrderTasks: RequestHandler = async (_req, res) => {
 
 app.get('/api/titleorder/tasks', getTitleOrderTasks);
 
+// Helper function for ClickUp API calls
+const clickupGet = async (endpoint: string) => {
+    const response = await axios.get(`https://api.clickup.com/api/v2${endpoint}`, {
+        headers: { Authorization: accessToken }
+    });
+    return response.data;
+};
+
+// Get complete data for Order Sheet and related Parcels
+const getOrderSheetFull = (async (req: Request<{ taskId: string }>, res: Response) => {
+    if (!accessToken) {
+        return res.status(401).send('Not authenticated');
+    }
+  
+    const { taskId } = req.params;
+    const parcelListId = process.env.ALL_TITLE_ORDERS_LIST_ID;
+  
+    try {
+      // Fetch the Order Sheet task details
+      const orderTask = await clickupGet(`/task/${taskId}`);
+  
+      // Find the relationship custom field ID (e.g., "All Title Orders (Test)")
+      const relationshipField = orderTask.custom_fields.find(
+        (field: any) => field.type === 'list_relationship'
+      );
+  
+      if (!relationshipField || !relationshipField.value.length) {
+        return res.json({ orderTask, parcels: [] }); // No related parcels found
+      }
+  
+      // Fetch each related Parcel Task detail
+      const parcelIds = relationshipField.value.map((p: any) => p.id);
+      const parcelPromises = parcelIds.map((id: string) => clickupGet(`/task/${id}`));
+      const parcels = await Promise.all(parcelPromises);
+  
+      return res.json({ orderTask, parcels });
+    } catch (error: any) {
+      console.error('Error fetching Order Sheet:', error.response?.data || error.message);
+      return res.status(500).send('API Error');
+    }
+}) as unknown as RequestHandler<{ taskId: string }>;
+
+app.get('/api/ordersheet/:taskId/full', getOrderSheetFull);
+
 // Protected endpoint returning ClickUp API data
 const getData: RequestHandler = async (_req, res) => {
     if (!accessToken) {
@@ -87,11 +125,8 @@ const getData: RequestHandler = async (_req, res) => {
     }
 
     try {
-        const clickupData = await axios.get('https://api.clickup.com/api/v2/user', {
-            headers: { Authorization: accessToken },
-        });
-
-        res.json(clickupData.data);
+        const clickupData = await clickupGet('/user');
+        res.json(clickupData);
     } catch (error) {
         console.error('ClickUp API error:', error);
         res.status(500).send('API Error');

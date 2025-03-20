@@ -7,7 +7,6 @@ A Vue.js application that integrates with ClickUp to manage title order tasks. T
 - **Frontend**: Vue 3 + TypeScript
 - **Backend**: Node.js + Express + TypeScript
 - **Authentication**: ClickUp OAuth 2.0
-- **Styling**: Tailwind CSS
 
 ## Prerequisites
 

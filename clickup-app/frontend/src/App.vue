@@ -20,7 +20,7 @@
     <!-- Modal -->
     <TaskModal 
       :is-open="isModalOpen"
-      :task="selectedTask"
+      :task="selectedTaskObject"
       @close="closeModal"
     />
   </div>
@@ -35,6 +35,8 @@ const clickupData = ref(null);
 const tasks = ref([]);
 const selectedTaskId = ref('');
 const selectedTask = ref<any>(null);
+const selectedTaskObject = ref(null);
+
 const isModalOpen = ref(false);
 const isLoggedIn = ref(false);
 
@@ -65,7 +67,7 @@ const loadTasks = async () => {
 };
 
 const showTaskModal = () => {
-  selectedTask.value = tasks.value.find(task => task.id === selectedTaskId.value);
+  selectedTaskObject.value = tasks.value.find(task => task.id === selectedTaskId.value);
   isModalOpen.value = true;
 };
 
