@@ -1,0 +1,50 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage{graphicx, xcolor, geometry, array, tabularx, booktabs}
+\geometry{margin=1in}
+
+\renewcommand{\arraystretch}{1.5} % Better row height
+\setlength{\parindent}{0pt} % No paragraph indentation
+
+\begin{document}
+
+\begin{center}
+    {\LARGE \textbf{{{title}}}} \\
+    \vspace{0.5em}
+    {\Large Order Sheet Info}
+\end{center}
+
+\vspace{1.5em}
+
+\begin{tabularx}{\textwidth}{@{} l X @{}}
+    \toprule
+    \textbf{Date Ordered:} & {{date_ordered}} \\
+    \midrule
+    \textbf{Title Scope:} & {{title_scope}} \\
+    \midrule
+    \textbf{E\&Rs:} & {{ers}} \\
+    \midrule
+    \textbf{Include Property Profile?} & {{include_property_profile}} \\
+    \midrule
+    \textbf{Delivery Instructions:} & {{delivery_instructions}} \\
+    \midrule
+    \textbf{Delivery Email:} & {{delivery_email}} \\
+    \bottomrule
+\end{tabularx}
+
+\vspace{2em}
+
+\begin{center}
+    {\Large \textbf{Parcels on Order Sheet}}
+\end{center}
+
+\vspace{1em}
+
+\begin{tabularx}{\textwidth}{@{} l l X l @{}}
+    \toprule
+    \textbf{Parcel Name} & \textbf{Parcel ID} & \textbf{Address} & \textbf{County, ST} \\
+    \midrule
+    {{parcels}}
+    \bottomrule
+\end{tabularx}
+
+\end{document}

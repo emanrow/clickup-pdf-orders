@@ -5,15 +5,18 @@
 
             <div class="order-details" v-if="orderData">
                 <h3>Order Sheet Info</h3>
-                <ul>
-                    <li><strong>Client:</strong> {{ getCustomField('🏢 Client') }}</li>
-                    <li><strong>Date Ordered:</strong> {{ formatDate(getCustomField('📅 Date Ordered')) }}</li>
-                    <li><strong>Date Requested by Client:</strong> {{ formatDate(getCustomField('📅 Date Requested by Client')) }}</li>
-                    <li><strong>Title Scope:</strong> {{ getCustomField('📜 Title Scope Parameters') }}</li>
-                    <li><strong>Delivery Email:</strong> {{ getCustomField('📨 Delivery email') }}</li>
-                    <li><strong>Include Property Profile?</strong> {{ getCustomField('🗺️ Include Property Profile Report?') ? 'Yes' : 'No' }}</li>
-                    <li><strong>Delivery Instructions:</strong> {{ getCustomField('Delivery Instructions') }}</li>
-                </ul>
+                <table class="order-info-table">
+                <tbody>
+                    <!-- <tr><td><strong>Client:</strong></td><td>{{ getCustomField('🏢 Client') }}</td></tr> -->
+                    <tr><td><strong>Date Ordered:</strong></td><td>{{ formatDate(getCustomField('📅 Date Ordered')) }}</td></tr>
+                    <!-- <tr><td><strong>Date Requested by Client:</strong></td><td>{{ formatDate(getCustomField('📅 Date Requested by Client')) }}</td></tr> -->
+                    <tr><td><strong>Title Scope:</strong></td><td>{{ formatArray(orderData.titleScopeDescriptions) }}</td></tr>
+                    <tr><td><strong>E&Rs:</strong></td><td>{{ formatArray(orderData.erScopeDescriptions) }}</td></tr>
+                    <tr><td><strong>Delivery Email:</strong></td><td>{{ getCustomField('📨 Delivery email') }}</td></tr>
+                    <tr><td><strong>Include Property Profile?</strong></td><td>{{ getCustomField('🗺️ Include Property Profile Report?') ? 'Yes' : 'No' }}</td></tr>
+                    <tr><td><strong>Delivery Instructions:</strong></td><td>{{ getCustomField('Delivery Instructions') }}</td></tr>
+                </tbody>
+                </table>
 
                 <h3>Parcels on Order Sheet</h3>
                 <table>
@@ -76,20 +79,15 @@ const close = () => {
 };
 
 const getCustomField = (name: string) => {
-    const field = orderData.value.orderTask.custom_fields.find((f: any) => f.name.includes(name.trim()));
+    const field = orderData.value?.orderTask?.custom_fields.find((f: any) => f.name.includes(name.trim()));
 
-    if (!field || field.value === undefined || field.value === null) return '—';
+    if (!field || field.value === undefined || field.value === null) return "—";
 
-    switch (field.type) {
-        case 'date':
-            return field.value;
-        case 'drop_down':
-            return field.type_config.options[field.value]?.name || '—';
-        case 'checkbox':
-            return field.value === 'true' ? 'Yes' : 'No';
-        default:
-            return field.value;
+    if (field.type === "drop_down" || field.type === "list_relationship") {
+        return field.value.name ?? "—"; // Ensure we use the proper name property
     }
+
+    return field.value;
 };
 
 const getParcelField = (parcel: any, fieldName: string) => {
@@ -97,11 +95,12 @@ const getParcelField = (parcel: any, fieldName: string) => {
 
     if (!field) return '—';
 
-    if (fieldName.includes('Property Address') && typeof field.value === 'object') {
-        return field.value.formatted_address || '—';
+    // Check if it's a structured address object
+    if (fieldName.includes("Property Address") && typeof field.value === "object") {
+        return field.value.formatted_address || "—";
     }
 
-    return field.value ?? '—';
+    return field.value ?? "—";
 };
 
 const formatDate = (timestamp: string | number) => {
@@ -112,97 +111,47 @@ const formatDate = (timestamp: string | number) => {
     return date.toLocaleDateString();
 };
 
-const generatePDF = () => {
-  if (!orderData.value) {
-    console.error("No order data available.");
-    return;
-  }
-
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-    lineHeightFactor: 1.2,
-  });
-
-  // Title
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(orderData.value.orderTask.name, 105, 15, { align: "center" });
-
-  // Order Sheet Info Title
-  doc.setFontSize(11);
-  doc.text("Order Sheet Info", 14, 25);
-
-  // Order Details (Two-Column Table)
-  const details = [
-    ["Client:", getCustomField("🏢 Client")],
-    ["Date Ordered:", formatDate(getCustomField("📅 Date Ordered"))],
-    ["Date Requested by Client:", formatDate(getCustomField("📅 Date Requested by Client"))],
-    ["Title Scope:", getCustomField("📜 Title Scope Parameters")],
-    ["Delivery Email:", getCustomField("📨 Delivery email")],
-    ["Include Property Profile?", getCustomField("🗺️ Include Property Profile Report?") ? "Yes" : "No"],
-  ];
-
-  autoTable(doc, {
-    startY: 28,
-    head: [["Field", "Value"]],
-    body: details,
-    theme: "plain",
-    styles: { fontSize: 9, cellPadding: 2 },
-    columnStyles: { 0: { fontStyle: "bold", cellWidth: 50 } },
-    margin: { left: 14, right: 14 },
-  });
-
-  // Delivery Instructions with Wrapping
-  let yPosition = doc.lastAutoTable.finalY + 5;
-  doc.setFont("helvetica", "bold");
-  doc.text("Delivery Instructions:", 14, yPosition);
-  doc.setFont("helvetica", "normal");
-
-  const instructions = getCustomField("Delivery Instructions") || "—";
-  const wrappedInstructions = doc.splitTextToSize(instructions, 170);
-  doc.text(wrappedInstructions, 14, yPosition + 5);
-  yPosition += wrappedInstructions.length * 5 + 5;
-
-  // Table Title
-  doc.setFont("helvetica", "bold");
-  doc.text("Parcels on Order Sheet", 14, yPosition);
-  yPosition += 5;
-
-  // Parcel Table with Better Layout
-  const tableData = orderData.value.parcels.map((parcel) => [
-    parcel.name,
-    getParcelField(parcel, "Parcel_ID"),
-    getParcelField(parcel, "Property Address"),
-    getParcelField(parcel, "County, ST"),
-  ]);
-
-  autoTable(doc, {
-    startY: yPosition,
-    head: [["Parcel Name", "Parcel ID", "Address", "County, ST"]],
-    body: tableData,
-    theme: "grid",
-    styles: { fontSize: 9, cellPadding: 2 },
-    headStyles: { fillColor: [40, 167, 69], textColor: 255, fontStyle: "bold" },
-    columnStyles: {
-      0: { cellWidth: 40 }, // Parcel Name
-      1: { cellWidth: 30 }, // Parcel ID
-      2: { cellWidth: 70 }, // Address
-      3: { cellWidth: 40 }, // County, ST
-    },
-    margin: { left: 14, right: 14 },
-  });
-
-  // Save PDF with dynamic filename
-  doc.save(`Title_Report_Order_${orderData.value.orderTask.name}.pdf`);
+const formatArray = (arr: string[] | undefined) => {
+    if (!arr || arr.length === 0) return "—";
+    return arr.join(", ");
 };
 
+const generatePDF = async () => {
+    try {
+        console.log("Sending request to generate PDF...");
+        const response = await axios.post(
+            'http://localhost:3000/api/generate-pdf',
+            {
+                title: orderData.value.orderTask.name,
+                date_ordered: formatDate(getCustomField("📅 Date Ordered")),
+                title_scope: formatArray(orderData.value.titleScopeDescriptions),
+                ers: formatArray(orderData.value.erScopeDescriptions),
+                include_property_profile: getCustomField("🗺️ Include Property Profile Report?") ? "Yes" : "No",
+                delivery_instructions: getCustomField("Delivery Instructions"),
+                delivery_email: getCustomField("📨 Delivery email"),
+                parcels: orderData.value.parcels.map(parcel => ({
+                    name: parcel.name,
+                    parcel_id: getParcelField(parcel, "Parcel_ID"),
+                    address: getParcelField(parcel, "Property Address"),
+                    county_st: getParcelField(parcel, "County, ST")
+                }))
+            },
+            { responseType: 'blob' } // Important: Expect binary response
+        );
 
+        console.log("Received PDF response. Creating download link...");
 
-
-
-
+        const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'Title_Report_Order.pdf');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (error) {
+        console.error("Error generating PDF:", error);
+    }
+};
 
 
 
@@ -236,19 +185,49 @@ const generatePDF = () => {
     margin-bottom: 0.5rem;
 }
 
-table {
-    width: 100%;
-    margin-top: 1rem;
-    border-collapse: collapse;
+.order-info-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
 }
 
-th, td {
-    border: 1px solid #444;
-    padding: 0.5rem;
+.order-info-table th,
+.order-info-table td {
+  padding: 0.5rem;
+  text-align: left;
+  border: none;
 }
 
-th {
-    background-color: #333;
+.order-info-table td:first-child {
+  text-align: right;
+  padding-right: 1rem;
+}
+
+.order-info-table td:last-child {
+  text-align: left;
+}
+
+/* Parcels table styles */
+.order-details table:not(.order-info-table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.order-details table:not(.order-info-table) th,
+.order-details table:not(.order-info-table) td {
+  padding: 0.5rem;
+  text-align: left;
+  border: 1px solid #444;
+}
+
+.order-details table:not(.order-info-table) th {
+  background-color: #333;
+  font-weight: bold;
+}
+
+.order-details table:not(.order-info-table) tr:nth-child(even) {
+  background-color: #2a2a2a;
 }
 
 .action-button, .close-button {
