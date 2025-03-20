@@ -2,10 +2,10 @@
   <div class="app">
     <h1>ClickUp OAuth with Vue.js</h1>
     <button @click="authenticate">Log in with ClickUp</button>
-    <button :disabled="!isLoggedIn" @click="fetchData">Fetch ClickUp Data</button>
+    <!-- <button :disabled="!isLoggedIn" @click="fetchData">Fetch ClickUp Data</button> -->
     <button :disabled="!isLoggedIn" @click="loadTasks">Generate Title Order</button>
 
-    <pre v-if="clickupData">{{ clickupData }}</pre>
+    <!-- <pre v-if="clickupData">{{ clickupData }}</pre> -->
 
     <!-- Dropdown Menu -->
     <div v-if="tasks.length" class="dropdown">
