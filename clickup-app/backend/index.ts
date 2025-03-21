@@ -30,8 +30,21 @@ const generatePdfHandler: RequestHandler = async (req, res) => {
             return;
         }
 
-        console.log("Generating PDF with data:", req.body);
-        const pdfPath = await generatePdf(req.body);
+        // Format Title Scope and E&Rs data with fallbacks
+        const pdfData = {
+            ...req.body,
+            title_scope_items: (req.body.titleScopeDescriptions || []).map((desc: string, i: number) => ({
+                name: (req.body.titleScopeNames || [])[i] || '',
+                description: desc || ''
+            })),
+            er_items: (req.body.erScopeDescriptions || []).map((desc: string, i: number) => ({
+                name: (req.body.erScopeNames || [])[i] || '',
+                description: desc || ''
+            }))
+        };
+
+        console.log("Generating PDF with data:", pdfData);
+        const pdfPath = await generatePdf(pdfData);
 
         // Ensure the file exists before sending
         if (!fs.existsSync(pdfPath)) {

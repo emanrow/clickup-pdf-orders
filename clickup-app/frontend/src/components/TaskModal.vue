@@ -119,13 +119,23 @@ const formatArray = (arr: string[] | undefined) => {
 const generatePDF = async () => {
     try {
         console.log("Sending request to generate PDF...");
+        
+        // Get Title Scope and E&Rs names from the task's custom fields
+        const titleScopeField = orderData.value?.orderTask?.custom_fields.find((f: any) => f.name.includes('Title Scope'));
+        const erScopeField = orderData.value?.orderTask?.custom_fields.find((f: any) => f.name.includes('E&Rs'));
+        
+        const titleScopeNames = titleScopeField?.value?.map((item: any) => item.name) || [];
+        const erScopeNames = erScopeField?.value?.map((item: any) => item.name) || [];
+
         const response = await axios.post(
             'http://localhost:3000/api/generate-pdf',
             {
                 title: orderData.value.orderTask.name,
                 date_ordered: formatDate(getCustomField("📅 Date Ordered")),
-                title_scope: formatArray(orderData.value.titleScopeDescriptions),
-                ers: formatArray(orderData.value.erScopeDescriptions),
+                titleScopeNames,
+                titleScopeDescriptions: orderData.value.titleScopeDescriptions,
+                erScopeNames,
+                erScopeDescriptions: orderData.value.erScopeDescriptions,
                 include_property_profile: getCustomField("🗺️ Include Property Profile Report?") ? "Yes" : "No",
                 delivery_instructions: getCustomField("Delivery Instructions"),
                 delivery_email: getCustomField("📨 Delivery email"),

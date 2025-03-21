@@ -1,50 +1,41 @@
-\documentclass[a4paper,12pt]{article}
-\usepackage{graphicx, xcolor, geometry, array, tabularx, booktabs}
-\geometry{margin=1in}
-
-\renewcommand{\arraystretch}{1.5} % Better row height
-\setlength{\parindent}{0pt} % No paragraph indentation
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[left=0.5in,right=0.5in,top=0.5in,bottom=0.5in]{geometry}
+\usepackage{array}
 
 \begin{document}
 
-\begin{center}
-    {\LARGE \textbf{{{title}}}} \\
-    \vspace{0.5em}
-    {\Large Order Sheet Info}
-\end{center}
-
-\vspace{1.5em}
-
-\begin{tabularx}{\textwidth}{@{} l X @{}}
-    \toprule
-    \textbf{Date Ordered:} & {{date_ordered}} \\
-    \midrule
-    \textbf{Title Scope:} & {{title_scope}} \\
-    \midrule
-    \textbf{E\&Rs:} & {{ers}} \\
-    \midrule
-    \textbf{Include Property Profile?} & {{include_property_profile}} \\
-    \midrule
-    \textbf{Delivery Instructions:} & {{delivery_instructions}} \\
-    \midrule
-    \textbf{Delivery Email:} & {{delivery_email}} \\
-    \bottomrule
-\end{tabularx}
-
-\vspace{2em}
+% Remove paragraph indentation globally
+\setlength{\parindent}{0pt}
+\setlength{\tabcolsep}{3pt}
 
 \begin{center}
-    {\Large \textbf{Parcels on Order Sheet}}
+\Large\textbf{{{title}}}
 \end{center}
 
 \vspace{1em}
+\noindent
+{\setlength{\baselineskip}{0em}%
+ \setlength{\parskip}{0pt}%
+\begin{tabular}{>{\raggedleft\arraybackslash}m{1.8in}|m{5.5in}}
+    \textbf{Date Ordered:} & {{date_ordered}} \\ \hline
+    \textbf{Title Scope:} & {{title_scope_items}} \\ \hline
+    \textbf{E\&Rs:} & {{er_items}} \\ \hline
+    \textbf{Include Property Profile?} & {{include_property_profile}} \\ \hline
+    \textbf{Delivery Instructions:} & {{delivery_instructions}} \\ \hline
+    \textbf{Delivery Email:} & {{delivery_email}} \\ \hline
+\end{tabular}}
 
-\begin{tabularx}{\textwidth}{@{} l l X l @{}}
-    \toprule
-    \textbf{Parcel Name} & \textbf{Parcel ID} & \textbf{Address} & \textbf{County, ST} \\
-    \midrule
+\vspace{1em}
+\noindent\textbf{Parcels:}
+\vspace{0.5em}
+
+\noindent
+\begin{tabular}{|p{0.9in}|p{1.8in}|p{3.0in}|p{1.4in}|}
+    \hline
+    \textbf{Name} & \textbf{Parcel ID} & \textbf{Address} & \textbf{County, ST} \\
+    \hline
     {{parcels}}
-    \bottomrule
-\end{tabularx}
+\end{tabular}
 
 \end{document}
