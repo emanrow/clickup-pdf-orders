@@ -12,7 +12,10 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: process.env.FRONTEND_URL }));
+app.use(cors({ 
+    origin: process.env.FRONTEND_URL,
+    exposedHeaders: ['Content-Disposition']
+}));
 
 
 // ClickUp OAuth URLs
@@ -45,6 +48,7 @@ const generatePdfHandler: RequestHandler = async (req, res) => {
 
         console.log("Generating PDF with data:", pdfData);
         const pdfPath = await generatePdf(pdfData);
+        const filename = path.basename(pdfPath);
 
         // Ensure the file exists before sending
         if (!fs.existsSync(pdfPath)) {
@@ -54,7 +58,7 @@ const generatePdfHandler: RequestHandler = async (req, res) => {
         }
 
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=Title_Report_Order.pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
         // Stream the PDF file
         const stream = fs.createReadStream(pdfPath);

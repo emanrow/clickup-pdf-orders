@@ -146,15 +146,20 @@ const generatePDF = async () => {
                     county_st: getParcelField(parcel, "County, ST")
                 }))
             },
-            { responseType: 'blob' } // Important: Expect binary response
+            { responseType: 'blob' }
         );
 
         console.log("Received PDF response. Creating download link...");
 
+        // Extract filename from Content-Disposition header
+        const contentDisposition = response.headers['content-disposition'];
+        const filenameMatch = contentDisposition && contentDisposition.match(/filename="(.+)"/);
+        const filename = filenameMatch ? filenameMatch[1] : 'output.pdf';
+
         const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', 'Title_Report_Order.pdf');
+        link.setAttribute('download', filename);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

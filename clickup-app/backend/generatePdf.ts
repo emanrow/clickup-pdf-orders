@@ -16,9 +16,11 @@ const OUTPUT_TEX = path.join(LATEX_DIR, 'output.tex');
  * Generates a unique PDF path
  * @returns Path to generated PDF
  */
-const generateUniquePdfPath = (): string => {
-    const timestamp = Date.now();
-    return path.join(LATEX_DIR, `output_${timestamp}.pdf`);
+const generateUniquePdfPath = (data: any): string => {
+    // Clean the title to be filesystem safe
+    const safeTitle = data.title.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_');
+    const date = data.date_ordered.replace(/\//g, '-');
+    return path.join(LATEX_DIR, `${safeTitle}_${date}.pdf`);
 };
 
 /**
@@ -52,7 +54,7 @@ export const generatePdf = async (data: any): Promise<string> => {
         await execPromise(`pdflatex -output-directory=${LATEX_DIR} ${OUTPUT_TEX}`);
 
         // Generate unique filename and copy the PDF
-        uniquePdfPath = generateUniquePdfPath();
+        uniquePdfPath = generateUniquePdfPath(data);
         fs.copyFileSync(path.join(LATEX_DIR, 'output.pdf'), uniquePdfPath);
 
         if (!fs.existsSync(uniquePdfPath)) {
