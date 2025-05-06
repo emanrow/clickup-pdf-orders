@@ -7,10 +7,11 @@
 \usepackage{longtable}
 
 \begin{document}
+\definecolor{lightergray}{gray}{0.9}
 
 % Remove paragraph indentation globally
 \setlength{\parindent}{0pt}
-\setlength{\tabcolsep}{3pt}
+\setlength{\tabcolsep}{8pt}
 
 \begin{center}
 \Large\textbf{{{title}}}
@@ -33,18 +34,21 @@
 \noindent\textbf{Parcels:}
 \vspace{0.5em}
 
+\newcolumntype{L}{>{\hspace{3pt}}l<{\hspace{3pt}}}
+
 \noindent
-\rowcolors{1}{lightgray}{white}
-\begin{longtable}{|l|l|l|l|}
+\setlength{\arrayrulewidth}{0.5pt}
+\rowcolors{1}{lightergray}{white}
+\begin{longtable}{|L|L|L|L|}
     % Header for first page
     \hline
-    \textbf{Name} & \textbf{Parcel ID} & \textbf{Address} & \textbf{County, ST} \\
+    \rowcolor{white}\textbf{Name} & \textbf{Parcel ID} & \textbf{Address} & \textbf{County, ST} \\
     \hline
     \endhead
     
-    % Header for subsequent pages
+    % Footer for continued pages
     \hline
-    \multicolumn{4}{|r|}{\textit{Continued on next page}} \\
+    \multicolumn{4}{|r|}{\normalsize\textit{Continued on next page}} \\
     \hline
     \endfoot
     
