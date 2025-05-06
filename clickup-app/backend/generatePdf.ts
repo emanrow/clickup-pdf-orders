@@ -147,8 +147,10 @@ const formatLatexMultiline = (text: string): string => {
  * Formats parcel data into LaTeX table rows
  */
 const formatParcelTable = (parcels: any[]): string => {
+    if (!parcels || parcels.length === 0) return "No parcels found. \\\\ \\hline";
+    
     return parcels.map(p => 
-        `${escapeLatex(p.name)} & ${escapeLatex(p.parcel_id)} & ${escapeLatex(p.address)} & ${escapeLatex(p.county_st)} \\\\ \\hline`
+        `${escapeLatex(p.name || '—')} & ${escapeLatex(p.parcel_id || '—')} & ${escapeLatex(p.address || '—')} & ${escapeLatex(p.county_st || '—')} \\\\ \\hline`
     ).join('\n');
 };
 

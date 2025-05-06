@@ -2,6 +2,9 @@
 \usepackage[utf8]{inputenc}
 \usepackage[left=0.5in,right=0.5in,top=0.5in,bottom=0.5in]{geometry}
 \usepackage{array}
+\usepackage{tabularx}
+\usepackage[table]{xcolor}
+\usepackage{longtable}
 
 \begin{document}
 
@@ -31,11 +34,26 @@
 \vspace{0.5em}
 
 \noindent
-\begin{tabular}{|p{0.9in}|p{1.8in}|p{3.0in}|p{1.4in}|}
+\rowcolors{1}{lightgray}{white}
+\begin{longtable}{|l|l|l|l|}
+    % Header for first page
     \hline
     \textbf{Name} & \textbf{Parcel ID} & \textbf{Address} & \textbf{County, ST} \\
     \hline
+    \endhead
+    
+    % Header for subsequent pages
+    \hline
+    \multicolumn{4}{|r|}{\textit{Continued on next page}} \\
+    \hline
+    \endfoot
+    
+    % Footer for last page
+    \hline
+    \endlastfoot
+    
+    % Table content
     {{parcels}}
-\end{tabular}
+\end{longtable}
 
 \end{document}
