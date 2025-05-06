@@ -48,7 +48,12 @@ const generatePdfHandler: RequestHandler = async (req, res) => {
 
         console.log("Generating PDF with data:", pdfData);
         const pdfPath = await generatePdf(pdfData);
-        const filename = path.basename(pdfPath);
+        
+        // Sanitize filename for use in Content-Disposition header
+        const baseFilename = path.basename(pdfPath);
+        const sanitizedFilename = baseFilename
+            .replace(/[^\x20-\x7E]/g, '_') // Replace non-ASCII characters
+            .replace(/[\\/:*?"<>|]/g, '_'); // Replace invalid filename characters
 
         // Ensure the file exists before sending
         if (!fs.existsSync(pdfPath)) {
@@ -58,7 +63,7 @@ const generatePdfHandler: RequestHandler = async (req, res) => {
         }
 
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${sanitizedFilename}"`);
 
         // Stream the PDF file
         const stream = fs.createReadStream(pdfPath);

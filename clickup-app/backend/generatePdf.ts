@@ -19,7 +19,20 @@ const OUTPUT_TEX = path.join(LATEX_DIR, 'output.tex');
 const generateUniquePdfPath = (data: any): string => {
     // Clean the title to be filesystem safe
     const safeTitle = data.title.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_');
-    const date = data.date_ordered.replace(/\//g, '-');
+    
+    // Check if date_ordered is valid, otherwise use current date
+    let date;
+    if (!data.date_ordered || data.date_ordered === "—") {
+        // Generate current date in mm-dd-yyyy format
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const year = now.getFullYear();
+        date = `${month}-${day}-${year}`;
+    } else {
+        date = data.date_ordered.replace(/\//g, '-');
+    }
+    
     return path.join(LATEX_DIR, `${safeTitle}_${date}.pdf`);
 };
 
@@ -32,6 +45,15 @@ export const generatePdf = async (data: any): Promise<string> => {
     let uniquePdfPath = '';
     try {
         console.log("Processing LaTeX template...");
+
+        // Ensure date_ordered is valid, set to current date if not
+        if (!data.date_ordered || data.date_ordered === "—") {
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const year = now.getFullYear();
+            data.date_ordered = `${month}/${day}/${year}`;
+        }
 
         // Read LaTeX template
         let latexTemplate = fs.readFileSync(TEMPLATE_FILE, 'utf8');
