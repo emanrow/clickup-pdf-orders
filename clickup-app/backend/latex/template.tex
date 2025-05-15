@@ -4,7 +4,14 @@
 \usepackage{array}
 \usepackage{tabularx}
 \usepackage[table]{xcolor}
-\usepackage{longtable}
+\usepackage{ltablex}
+\keepXColumns
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\usepackage{booktabs}
+
+\setlength{\LTpre}{0pt}
+\setlength{\LTpost}{0pt}
+
 
 \begin{document}
 \definecolor{lightergray}{gray}{0.9}
@@ -34,12 +41,11 @@
 \noindent\textbf{Parcels:}
 \vspace{0.5em}
 
-\newcolumntype{L}{>{\hspace{3pt}}l<{\hspace{3pt}}}
-
 \noindent
 \setlength{\arrayrulewidth}{0.5pt}
 \rowcolors{1}{lightergray}{white}
-\begin{longtable}{|L|L|L|L|}
+\begin{center}
+\begin{tabularx}{\textwidth}{|l|l|X|l|}
     % Header for first page
     \hline
     \rowcolor{white}\textbf{Name} & \textbf{Parcel ID} & \textbf{Address} & \textbf{County, ST} \\
@@ -58,6 +64,6 @@
     
     % Table content
     {{parcels}}
-\end{longtable}
-
+\end{tabularx}
+\end{center}
 \end{document}

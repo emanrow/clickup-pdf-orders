@@ -72,8 +72,11 @@ export const generatePdf = async (data: any): Promise<string> => {
         // Write the processed template
         fs.writeFileSync(OUTPUT_TEX, latexTemplate);
 
-        console.log("Running pdflatex...");
-        await execPromise(`pdflatex -output-directory=${LATEX_DIR} ${OUTPUT_TEX}`);
+        console.log("Running pdflatex (pass 1)...");
+        await execPromise(`pdflatex -interaction=nonstopmode -output-directory=${LATEX_DIR} ${OUTPUT_TEX}`);
+
+        console.log("Running pdflatex (pass 2)...");
+        await execPromise(`pdflatex -interaction=nonstopmode -output-directory=${LATEX_DIR} ${OUTPUT_TEX}`);
 
         // Generate unique filename and copy the PDF
         uniquePdfPath = generateUniquePdfPath(data);

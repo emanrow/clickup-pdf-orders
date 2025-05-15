@@ -189,6 +189,13 @@ const getOrderSheetFull = (async (req: Request<{ taskId: string }>, res: Respons
         const parcelPromises = parcelIds.map((id: string) => clickupGet(`/task/${id}`));
         const parcels = await Promise.all(parcelPromises);
 
+        // Sort parcels alphabetically by name
+        parcels.sort((a, b) => {
+            const nameA = a.name || '';
+            const nameB = b.name || '';
+            return nameA.localeCompare(nameB);
+        });
+
         return res.json({
             orderTask,
             parcels,
@@ -253,3 +260,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });
+
