@@ -24,6 +24,7 @@ CLICKUP_REDIRECT_URI=http://localhost:3000/api/callback
 FRONTEND_URL=http://localhost:5173
 TITLEORDER_LIST_ID=your_list_id
 PORT=3000
+PARCEL_LIST_NAMES=Title Reports (MTT),Title Reports (Fidelity)
 ```
 
 2. Create a `.env` file in the frontend directory:

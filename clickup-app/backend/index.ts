@@ -152,6 +152,7 @@ const clickupGet = async (endpoint: string) => {
 };
 
 // Get complete data for Order Sheet, including Title Scope & E&Rs descriptions
+const PARCEL_LIST_NAMES = (process.env.PARCEL_LIST_NAMES || '').split(',').map(s => s.trim()).filter(Boolean);
 const getOrderSheetFull = (async (req: Request<{ taskId: string }>, res: Response) => {
     if (!accessToken) {
         return res.status(401).send('Not authenticated');
@@ -179,15 +180,18 @@ const getOrderSheetFull = (async (req: Request<{ taskId: string }>, res: Respons
         const titleScopeDescriptions = titleScopeIds.map((id: string) => orderTypeDescriptions[id] || "—");
         const erScopeDescriptions = erScopeIds.map((id: string) => erTypeDescriptions[id] || "—");
 
-        // Find the relationship field for parcels
-        const relationshipField = orderTask.custom_fields.find(
-            (field: any) => field.type === 'list_relationship'
-        );
-
-        // Fetch related Parcel Tasks
-        const parcelIds = relationshipField?.value?.map((p: any) => p.id) || [];
+        // Aggregate related Parcel Tasks from all relevant fields
+        const parcelIds = orderTask.custom_fields
+            .filter((field: any) => field.type === 'list_relationship' && PARCEL_LIST_NAMES.includes(field.name))
+            .flatMap((field: any) => (Array.isArray(field.value) ? field.value.map((p: any) => p.id) : []));
         const parcelPromises = parcelIds.map((id: string) => clickupGet(`/task/${id}`));
-        const parcels = await Promise.all(parcelPromises);
+        let parcels = await Promise.all(parcelPromises);
+
+        // Add url property to each parcel
+        parcels = parcels.map((p: any) => ({
+            ...p,
+            url: `https://app.clickup.com/t/${p.id}`
+        }));
 
         // Sort parcels alphabetically by name
         parcels.sort((a, b) => {

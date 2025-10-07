@@ -58,6 +58,10 @@ export const generatePdf = async (data: any): Promise<string> => {
         // Read LaTeX template
         let latexTemplate = fs.readFileSync(TEMPLATE_FILE, 'utf8');
 
+        // Log the generated parcel table rows
+        const parcelTableRows = formatParcelTable(data.parcels);
+        console.log("Generated LaTeX parcel table rows:\n", parcelTableRows);
+
         // Replace placeholders with escaped data
         latexTemplate = latexTemplate
             .replace('{{title}}', escapeLatex(data.title))
@@ -67,7 +71,10 @@ export const generatePdf = async (data: any): Promise<string> => {
             .replace('{{include_property_profile}}', escapeLatex(data.include_property_profile))
             .replace('{{delivery_instructions}}', formatLatexMultiline(data.delivery_instructions))
             .replace('{{delivery_email}}', escapeLatex(data.delivery_email))
-            .replace('{{parcels}}', formatParcelTable(data.parcels));
+            .replace('{{parcels}}', parcelTableRows);
+
+        // Log the full LaTeX template
+        console.log("Full LaTeX template to be compiled:\n", latexTemplate);
 
         // Write the processed template
         fs.writeFileSync(OUTPUT_TEX, latexTemplate);
@@ -90,6 +97,15 @@ export const generatePdf = async (data: any): Promise<string> => {
         return uniquePdfPath;
     } catch (error) {
         console.error('Error generating PDF:', error);
+        // Write the LaTeX file for inspection if it failed
+        try {
+            if (fs.existsSync(OUTPUT_TEX)) {
+                fs.copyFileSync(OUTPUT_TEX, path.join(LATEX_DIR, 'failed_output.tex'));
+                console.error('Wrote failed LaTeX to failed_output.tex for inspection.');
+            }
+        } catch (copyErr) {
+            console.error('Failed to copy failed LaTeX file:', copyErr);
+        }
         // If we created a unique PDF but something else failed, clean it up
         if (uniquePdfPath && fs.existsSync(uniquePdfPath)) {
             fs.unlinkSync(uniquePdfPath);
@@ -136,6 +152,12 @@ const escapeLatex = (text: string): string => {
         .replace(/\n/g, '\\newline ');
 };
 
+// Helper to escape URLs for LaTeX (minimal escaping)
+const escapeLatexUrl = (url: string): string => {
+    if (!url) return '';
+    // Only escape backslashes and percent signs in URLs
+    return url.replace(/\\/g, '\\textbackslash{}').replace(/%/g, '\\%');
+};
 
 /**
  * Formats multiline text for LaTeX
@@ -150,11 +172,15 @@ const formatLatexMultiline = (text: string): string => {
  * Formats parcel data into LaTeX table rows
  */
 const formatParcelTable = (parcels: any[]): string => {
-    if (!parcels || parcels.length === 0) return "No parcels found. \\\\ \\hline";
-    
-    return parcels.map(p => 
-        `${escapeLatex(p.name || '—')} & ${escapeLatex(p.parcel_id || '—')} & ${escapeLatex(p.address || '—')} & ${escapeLatex(p.county_st || '—')} \\\\ \\hline`
-    ).join('\n');
+    if (!parcels || parcels.length === 0) return "No parcels found. \\ \hline";
+    return parcels.map((p, i) => {
+        const name = escapeLatex(p.name || '—');
+        const url = p.url ? escapeLatexUrl(p.url) : '';
+        const nameCell = url ? `\\href{${url}}{${name}}` : name;
+        const row = `${nameCell} & ${escapeLatex(p.parcel_id || '—')} & ${escapeLatex(p.address || '—')} & ${escapeLatex(p.county_st || '—')}`;
+        // Add \\ \hline to all the rows
+        return i < parcels.length ? `${row} \\\\ \\hline` : row;
+    }).join('\n');
 };
 
 /**

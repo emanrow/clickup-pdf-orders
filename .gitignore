@@ -62,3 +62,11 @@ Thumbs.db
 
 # Generated PDF files
 *.pdf
+
+# Latex files
+*.tex
+*.pdf
+*.log
+*.aux
+*.out
+*.toc

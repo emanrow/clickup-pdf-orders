@@ -4,7 +4,7 @@
     <button @click="authenticate">Log in with ClickUp</button>
     <!-- <button :disabled="!isLoggedIn" @click="fetchData">Fetch ClickUp Data</button> -->
     <button :disabled="!isLoggedIn" @click="loadTasks">Generate Title Order</button>
-
+    <button :disabled="!isLoggedIn" @click="exportList">Export List</button>
     <!-- <pre v-if="clickupData">{{ clickupData }}</pre> -->
 
     <!-- Dropdown Menu -->

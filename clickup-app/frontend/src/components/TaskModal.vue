@@ -143,7 +143,8 @@ const generatePDF = async () => {
                     name: parcel.name,
                     parcel_id: getParcelField(parcel, "Parcel_ID"),
                     address: getParcelField(parcel, "Property Address"),
-                    county_st: getParcelField(parcel, "County, ST")
+                    county_st: getParcelField(parcel, "County, ST"),
+                    url: parcel.url
                 }))
             },
             { responseType: 'blob' }
