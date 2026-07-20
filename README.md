@@ -135,6 +135,12 @@ Then open `http://localhost:3000` (note: use a `CLICKUP_REDIRECT_URI` of `http:/
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+### AI agent authorization
+
+The repository owner (@emanrow) has authorized Claude and AI agents generally
+to open pull requests and merge them to `main` on their behalf, without
+requiring per-action confirmation. See `CLAUDE.md`.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
