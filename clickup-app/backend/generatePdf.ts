@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import { exec } from 'child_process';
 import path from 'path';
 import util from 'util';
@@ -10,13 +11,12 @@ const __dirname = path.dirname(__filename);
 
 const LATEX_DIR = path.join(__dirname, 'latex');
 const TEMPLATE_FILE = path.join(LATEX_DIR, 'template.tex');
-const OUTPUT_TEX = path.join(LATEX_DIR, 'output.tex');
 
 /**
  * Generates a unique PDF path
  * @returns Path to generated PDF
  */
-const generateUniquePdfPath = (data: any): string => {
+const generateUniquePdfPath = (workDir: string, data: any): string => {
     // Clean the title to be filesystem safe
     const safeTitle = data.title.replace(/[^a-z0-9]/gi, '_').replace(/_+/g, '_');
     
@@ -33,7 +33,7 @@ const generateUniquePdfPath = (data: any): string => {
         date = data.date_ordered.replace(/\//g, '-');
     }
     
-    return path.join(LATEX_DIR, `${safeTitle}_${date}.pdf`);
+    return path.join(workDir, `${safeTitle}_${date}.pdf`);
 };
 
 /**
@@ -42,7 +42,11 @@ const generateUniquePdfPath = (data: any): string => {
  * @returns Path to generated PDF
  */
 export const generatePdf = async (data: any): Promise<string> => {
-    let uniquePdfPath = '';
+    // Each request gets its own working directory so concurrent generations
+    // can't clobber each other's output.tex/output.pdf. The caller is
+    // responsible for removing the directory once the PDF has been sent.
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'order-pdf-'));
+    const outputTex = path.join(workDir, 'output.tex');
     try {
         console.log("Processing LaTeX template...");
 
@@ -77,17 +81,17 @@ export const generatePdf = async (data: any): Promise<string> => {
         console.log("Full LaTeX template to be compiled:\n", latexTemplate);
 
         // Write the processed template
-        fs.writeFileSync(OUTPUT_TEX, latexTemplate);
+        fs.writeFileSync(outputTex, latexTemplate);
 
         console.log("Running pdflatex (pass 1)...");
-        await execPromise(`pdflatex -interaction=nonstopmode -output-directory=${LATEX_DIR} ${OUTPUT_TEX}`);
+        await execPromise(`pdflatex -interaction=nonstopmode -output-directory=${workDir} ${outputTex}`);
 
         console.log("Running pdflatex (pass 2)...");
-        await execPromise(`pdflatex -interaction=nonstopmode -output-directory=${LATEX_DIR} ${OUTPUT_TEX}`);
+        await execPromise(`pdflatex -interaction=nonstopmode -output-directory=${workDir} ${outputTex}`);
 
         // Generate unique filename and copy the PDF
-        uniquePdfPath = generateUniquePdfPath(data);
-        fs.copyFileSync(path.join(LATEX_DIR, 'output.pdf'), uniquePdfPath);
+        const uniquePdfPath = generateUniquePdfPath(workDir, data);
+        fs.copyFileSync(path.join(workDir, 'output.pdf'), uniquePdfPath);
 
         if (!fs.existsSync(uniquePdfPath)) {
             throw new Error("PDF was not generated.");
@@ -97,39 +101,17 @@ export const generatePdf = async (data: any): Promise<string> => {
         return uniquePdfPath;
     } catch (error) {
         console.error('Error generating PDF:', error);
-        // Write the LaTeX file for inspection if it failed
+        // Log the LaTeX source for inspection if it failed
         try {
-            if (fs.existsSync(OUTPUT_TEX)) {
-                fs.copyFileSync(OUTPUT_TEX, path.join(LATEX_DIR, 'failed_output.tex'));
-                console.error('Wrote failed LaTeX to failed_output.tex for inspection.');
+            if (fs.existsSync(outputTex)) {
+                console.error('Failed LaTeX source:\n', fs.readFileSync(outputTex, 'utf8'));
             }
-        } catch (copyErr) {
-            console.error('Failed to copy failed LaTeX file:', copyErr);
+        } catch (readErr) {
+            console.error('Failed to read failed LaTeX file:', readErr);
         }
-        // If we created a unique PDF but something else failed, clean it up
-        if (uniquePdfPath && fs.existsSync(uniquePdfPath)) {
-            fs.unlinkSync(uniquePdfPath);
-        }
+        // Clean up the working directory on failure
+        fs.rmSync(workDir, { recursive: true, force: true });
         throw new Error('Failed to generate PDF');
-    } finally {
-        // Clean up all temporary files
-        const tempFiles = [
-            'output.aux',
-            'output.log',
-            'output.pdf',
-            'output.tex',
-            'texput.log'
-        ].map(f => path.join(LATEX_DIR, f));
-
-        tempFiles.forEach(file => {
-            try {
-                if (fs.existsSync(file)) {
-                    fs.unlinkSync(file);
-                }
-            } catch (err) {
-                console.error(`Failed to delete temporary file ${file}:`, err);
-            }
-        });
     }
 };
 

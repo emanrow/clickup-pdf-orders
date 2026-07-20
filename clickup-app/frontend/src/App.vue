@@ -30,6 +30,7 @@
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 import TaskModal from './components/TaskModal.vue';
+import { API_URL } from './config.js';
 
 const clickupData = ref(null);
 const tasks = ref([]);
@@ -41,12 +42,12 @@ const isModalOpen = ref(false);
 const isLoggedIn = ref(false);
 
 const authenticate = () => {
-  window.location.href = 'http://localhost:3000/api/auth';
+  window.location.href = `${API_URL}/api/auth`;
 };
 
 const fetchData = async () => {
   try {
-    const response = await axios.get('http://localhost:3000/api/data');
+    const response = await axios.get(`${API_URL}/api/data`);
     clickupData.value = response.data;
     isLoggedIn.value = true;
   } catch (error) {
@@ -57,7 +58,7 @@ const fetchData = async () => {
 
 const loadTasks = async () => {
   try {
-    const response = await axios.get('http://localhost:3000/api/titleorder/tasks');
+    const response = await axios.get(`${API_URL}/api/titleorder/tasks`);
     tasks.value = response.data;
     isLoggedIn.value = true;
   } catch (error) {
@@ -83,7 +84,7 @@ onMounted(async () => {
   } else {
     // Attempt a quick auth check
     try {
-      await axios.get('http://localhost:3000/api/data');
+      await axios.get(`${API_URL}/api/data`);
       isLoggedIn.value = true;
     } catch {
       isLoggedIn.value = false;

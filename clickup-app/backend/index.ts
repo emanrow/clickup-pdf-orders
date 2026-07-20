@@ -3,20 +3,32 @@ import type { Request, Response, RequestHandler } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
+import cookieParser from 'cookie-parser';
 import { generatePdf } from './generatePdf.js';
 import fs from 'fs';
-import { exec } from "child_process";
 import path from "path";
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-const app = express();
-app.use(express.json());
-app.use(cors({ 
-    origin: process.env.FRONTEND_URL,
-    exposedHeaders: ['Content-Disposition']
-}));
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const IS_PROD = process.env.NODE_ENV === 'production';
 
+const app = express();
+// Railway terminates TLS at its proxy; needed so secure cookies work
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '2mb' }));
+app.use(cookieParser(process.env.COOKIE_SECRET || 'dev-secret-change-me'));
+
+// In production the frontend is served by this same server, so CORS is only
+// needed for local development where Vite runs on its own port.
+if (process.env.FRONTEND_URL) {
+    app.use(cors({
+        origin: process.env.FRONTEND_URL,
+        credentials: true,
+        exposedHeaders: ['Content-Disposition']
+    }));
+}
 
 // ClickUp OAuth URLs
 const CLIENT_ID = process.env.CLICKUP_CLIENT_ID!;
@@ -24,7 +36,11 @@ const CLIENT_SECRET = process.env.CLICKUP_CLIENT_SECRET!;
 const REDIRECT_URI = process.env.CLICKUP_REDIRECT_URI!;
 const ORDER_TYPE_LIST_ID = process.env.ORDER_TYPE_LIST_ID!;
 const ER_TYPE_LIST_ID = process.env.ER_TYPE_LIST_ID!;
-let accessToken = '';
+
+// Each user's ClickUp token lives in their own signed, httpOnly cookie so the
+// app can be used by multiple people at once and survives server restarts.
+const TOKEN_COOKIE = 'clickup_token';
+const getToken = (req: Request): string | undefined => req.signedCookies?.[TOKEN_COOKIE];
 
 const generatePdfHandler: RequestHandler = async (req, res) => {
     try {
@@ -48,7 +64,7 @@ const generatePdfHandler: RequestHandler = async (req, res) => {
 
         console.log("Generating PDF with data:", pdfData);
         const pdfPath = await generatePdf(pdfData);
-        
+
         // Sanitize filename for use in Content-Disposition header
         const baseFilename = path.basename(pdfPath);
         const sanitizedFilename = baseFilename
@@ -69,10 +85,10 @@ const generatePdfHandler: RequestHandler = async (req, res) => {
         const stream = fs.createReadStream(pdfPath);
         stream.pipe(res);
 
-        // Delete the file after streaming
+        // Delete the per-request working directory after streaming
         stream.on('close', () => {
-            fs.unlink(pdfPath, (err) => {
-                if (err) console.error("Error deleting PDF:", err);
+            fs.rm(path.dirname(pdfPath), { recursive: true, force: true }, (err) => {
+                if (err) console.error("Error deleting PDF work dir:", err);
             });
         });
 
@@ -85,8 +101,8 @@ const generatePdfHandler: RequestHandler = async (req, res) => {
 
 app.post('/api/generate-pdf', generatePdfHandler);
 
-app.get('/', (_, res) => {
-    res.send('Backend server is running!');
+app.get('/api/health', (_, res) => {
+    res.send('ok');
 });
 
 // Initiate OAuth flow
@@ -109,18 +125,24 @@ app.get('/api/callback', async (req, res) => {
             },
         );
 
-        accessToken = tokenResponse.data.access_token;
-        console.log('Received ClickUp access token:', accessToken);
+        res.cookie(TOKEN_COOKIE, tokenResponse.data.access_token, {
+            httpOnly: true,
+            signed: true,
+            secure: IS_PROD,
+            sameSite: 'lax',
+            maxAge: 1000 * 60 * 60 * 24 * 30 // 30 days
+        });
 
-        // Redirect frontend to indicate success
-        res.redirect(`${process.env.FRONTEND_URL}?auth=success`);
+        // Redirect frontend to indicate success (relative when served same-origin)
+        res.redirect(`${process.env.FRONTEND_URL || ''}/?auth=success`);
     } catch (error) {
         console.error('Token exchange error:', error);
         res.status(500).send('OAuth Error');
     }
 });
 
-const getTitleOrderTasks: RequestHandler = async (_req, res) => {
+const getTitleOrderTasks: RequestHandler = async (req, res) => {
+    const accessToken = getToken(req);
     if (!accessToken) {
         res.status(401).send('Not authenticated');
         return;
@@ -129,7 +151,7 @@ const getTitleOrderTasks: RequestHandler = async (_req, res) => {
     const listId = process.env.TITLEORDER_LIST_ID;
 
     try {
-        const tasksResponse = await clickupGet(`/list/${listId}/task`);
+        const tasksResponse = await clickupGet(`/list/${listId}/task`, accessToken);
         res.json(tasksResponse.tasks);
     } catch (error: unknown) {
         if (error instanceof Error) {
@@ -144,7 +166,7 @@ const getTitleOrderTasks: RequestHandler = async (_req, res) => {
 app.get('/api/titleorder/tasks', getTitleOrderTasks);
 
 // Helper function for ClickUp API calls
-const clickupGet = async (endpoint: string) => {
+const clickupGet = async (endpoint: string, accessToken: string) => {
     const response = await axios.get(`https://api.clickup.com/api/v2${endpoint}`, {
         headers: { Authorization: accessToken }
     });
@@ -154,6 +176,7 @@ const clickupGet = async (endpoint: string) => {
 // Get complete data for Order Sheet, including Title Scope & E&Rs descriptions
 const PARCEL_LIST_NAMES = (process.env.PARCEL_LIST_NAMES || '').split(',').map(s => s.trim()).filter(Boolean);
 const getOrderSheetFull = (async (req: Request<{ taskId: string }>, res: Response) => {
+    const accessToken = getToken(req);
     if (!accessToken) {
         return res.status(401).send('Not authenticated');
     }
@@ -162,10 +185,10 @@ const getOrderSheetFull = (async (req: Request<{ taskId: string }>, res: Respons
 
     try {
         // Fetch the Order Sheet task details
-        const orderTask = await clickupGet(`/task/${taskId}`);
+        const orderTask = await clickupGet(`/task/${taskId}`, accessToken);
 
         // Fetch validation descriptions
-        const { orderTypeDescriptions, erTypeDescriptions } = await fetchValidationDescriptions();
+        const { orderTypeDescriptions, erTypeDescriptions } = await fetchValidationDescriptions(accessToken);
 
         // Extract linked "Title Scope (Validated)" and "E&Rs (Validated)" IDs
         const getLinkedTaskIds = (fieldName: string) => {
@@ -184,7 +207,7 @@ const getOrderSheetFull = (async (req: Request<{ taskId: string }>, res: Respons
         const parcelIds = orderTask.custom_fields
             .filter((field: any) => field.type === 'list_relationship' && PARCEL_LIST_NAMES.includes(field.name))
             .flatMap((field: any) => (Array.isArray(field.value) ? field.value.map((p: any) => p.id) : []));
-        const parcelPromises = parcelIds.map((id: string) => clickupGet(`/task/${id}`));
+        const parcelPromises = parcelIds.map((id: string) => clickupGet(`/task/${id}`, accessToken));
         let parcels = await Promise.all(parcelPromises);
 
         // Add url property to each parcel
@@ -216,14 +239,15 @@ const getOrderSheetFull = (async (req: Request<{ taskId: string }>, res: Respons
 app.get('/api/ordersheet/:taskId/full', getOrderSheetFull);
 
 // Protected endpoint returning ClickUp API data
-const getData: RequestHandler = async (_req, res) => {
+const getData: RequestHandler = async (req, res) => {
+    const accessToken = getToken(req);
     if (!accessToken) {
         res.status(401).send('Not authenticated');
         return;
     }
 
     try {
-        const clickupData = await clickupGet('/user');
+        const clickupData = await clickupGet('/user', accessToken);
         res.json(clickupData);
     } catch (error) {
         console.error('ClickUp API error:', error);
@@ -232,11 +256,11 @@ const getData: RequestHandler = async (_req, res) => {
 };
 
 // Fetch Order Type Parameters and E&R Type Parameters
-const fetchValidationDescriptions = async () => {
+const fetchValidationDescriptions = async (accessToken: string) => {
     try {
         const [orderTypeTasks, erTypeTasks] = await Promise.all([
-            clickupGet(`/list/${ORDER_TYPE_LIST_ID}/task`),
-            clickupGet(`/list/${ER_TYPE_LIST_ID}/task`)
+            clickupGet(`/list/${ORDER_TYPE_LIST_ID}/task`, accessToken),
+            clickupGet(`/list/${ER_TYPE_LIST_ID}/task`, accessToken)
         ]);
 
         const extractDescriptions = (tasks: any) =>
@@ -260,8 +284,21 @@ const fetchValidationDescriptions = async () => {
 
 app.get('/api/data', getData);
 
+// Serve the built frontend (single-service deployment). In local dev the
+// frontend runs on its own Vite server and this directory won't exist.
+const FRONTEND_DIST = process.env.FRONTEND_DIST || path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(FRONTEND_DIST)) {
+    app.use(express.static(FRONTEND_DIST));
+    app.get(/^\/(?!api\/).*/, (_, res) => {
+        res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
+    });
+} else {
+    app.get('/', (_, res) => {
+        res.send('Backend server is running!');
+    });
+}
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });
-
