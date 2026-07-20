@@ -50,6 +50,7 @@ import { ref, watch } from 'vue';
 import axios from 'axios';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { API_URL } from '../config.js';
 
 
 const props = defineProps<{ isOpen: boolean; task: any }>();
@@ -59,7 +60,7 @@ const orderData = ref<any>(null);
 
 const fetchOrderData = async () => {
     try {
-        const response = await axios.get(`http://localhost:3000/api/ordersheet/${props.task.id}/full`);
+        const response = await axios.get(`${API_URL}/api/ordersheet/${props.task.id}/full`);
         console.log('Raw API Response:', response.data);
         orderData.value = response.data;
     } catch (error) {
@@ -128,7 +129,7 @@ const generatePDF = async () => {
         const erScopeNames = erScopeField?.value?.map((item: any) => item.name) || [];
 
         const response = await axios.post(
-            'http://localhost:3000/api/generate-pdf',
+            `${API_URL}/api/generate-pdf`,
             {
                 title: orderData.value.orderTask.name,
                 date_ordered: formatDate(getCustomField("📅 Date Ordered")),
