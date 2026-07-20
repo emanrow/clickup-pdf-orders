@@ -18,7 +18,14 @@ const app = express();
 // Railway terminates TLS at its proxy; needed so secure cookies work
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '2mb' }));
-app.use(cookieParser(process.env.COOKIE_SECRET || 'dev-secret-change-me'));
+
+// The dev fallback secret is public (this repo is open source), so cookies
+// signed with it are forgeable. Refuse to start in production without a real one.
+const COOKIE_SECRET = process.env.COOKIE_SECRET;
+if (IS_PROD && !COOKIE_SECRET) {
+    throw new Error('COOKIE_SECRET must be set in production (e.g. `openssl rand -hex 32`)');
+}
+app.use(cookieParser(COOKIE_SECRET || 'dev-secret-change-me'));
 
 // In production the frontend is served by this same server, so CORS is only
 // needed for local development where Vite runs on its own port.
@@ -43,6 +50,12 @@ const TOKEN_COOKIE = 'clickup_token';
 const getToken = (req: Request): string | undefined => req.signedCookies?.[TOKEN_COOKIE];
 
 const generatePdfHandler: RequestHandler = async (req, res) => {
+    // PDF generation shells out to pdflatex, so keep it behind authentication
+    if (!getToken(req)) {
+        res.status(401).send('Not authenticated');
+        return;
+    }
+
     try {
         if (!req.body) {
             res.status(400).send("Missing request body");

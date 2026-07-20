@@ -134,12 +134,12 @@ const escapeLatex = (text: string): string => {
         .replace(/\n/g, '\\newline ');
 };
 
-// Helper to escape URLs for LaTeX (minimal escaping)
-const escapeLatexUrl = (url: string): string => {
-    if (!url) return '';
-    // Only escape backslashes and percent signs in URLs
-    return url.replace(/\\/g, '\\textbackslash{}').replace(/%/g, '\\%');
-};
+// URLs are interpolated into \href{} where escaping can't make arbitrary
+// input safe (e.g. "}" breaks out of the argument), so instead only accept
+// ClickUp task URLs and drop anything else.
+const SAFE_CLICKUP_URL = /^https:\/\/app\.clickup\.com\/t\/[A-Za-z0-9_-]+$/;
+const safeLatexUrl = (url: string): string =>
+    url && SAFE_CLICKUP_URL.test(url) ? url : '';
 
 /**
  * Formats multiline text for LaTeX
@@ -157,7 +157,7 @@ const formatParcelTable = (parcels: any[]): string => {
     if (!parcels || parcels.length === 0) return "No parcels found. \\ \hline";
     return parcels.map((p, i) => {
         const name = escapeLatex(p.name || '—');
-        const url = p.url ? escapeLatexUrl(p.url) : '';
+        const url = safeLatexUrl(p.url);
         const nameCell = url ? `\\href{${url}}{${name}}` : name;
         const row = `${nameCell} & ${escapeLatex(p.parcel_id || '—')} & ${escapeLatex(p.address || '—')} & ${escapeLatex(p.county_st || '—')}`;
         // Add \\ \hline to all the rows
