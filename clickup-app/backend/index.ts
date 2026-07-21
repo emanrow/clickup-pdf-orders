@@ -6,6 +6,7 @@ import axios from 'axios';
 import cookieParser from 'cookie-parser';
 import { generatePdf } from './generatePdf.js';
 import { rateLimiter } from './rateLimiter.js';
+import { buildTaskWorkbook } from './exportXlsx.js';
 import fs from 'fs';
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -545,7 +546,72 @@ const csvEscape = (value: any): string => {
     return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
-// Export tasks from a specific list as CSV
+// Standard task columns available in every export
+const BASE_FIELDS = [
+    { id: 'id', title: 'ID' },
+    { id: 'name', title: 'Name' },
+    { id: 'description', title: 'Description' },
+    { id: 'status', title: 'Status' },
+    { id: 'priority', title: 'Priority' },
+    { id: 'assignees', title: 'Assignees' },
+    { id: 'creator', title: 'Creator' },
+    { id: 'date_created', title: 'Date Created' },
+    { id: 'date_updated', title: 'Date Updated' },
+    { id: 'due_date', title: 'Due Date' },
+    { id: 'url', title: 'URL' },
+    { id: 'tags', title: 'Tags' },
+    { id: 'time_estimate', title: 'Time Estimate' },
+    { id: 'time_spent', title: 'Time Spent' }
+];
+
+// Custom field columns are namespaced so they can't collide with base ids
+const customColumnId = (fieldName: string) => `cf:${fieldName}`;
+
+/** Sortable timestamp for filenames, e.g. 2026-07-21_14-35-09 (UTC). */
+const filenameTimestamp = (): string => {
+    const iso = new Date().toISOString();
+    return iso.slice(0, 10) + '_' + iso.slice(11, 19).replace(/:/g, '-');
+};
+
+const sanitizeFilename = (name: string): string =>
+    name.replace(/[^\x20-\x7E]/g, '_').replace(/[\\/:*?"<>|]/g, '_').trim() || 'export';
+
+// Available export columns for a list (standard + its custom fields), plus
+// the list name so the client can build a friendly filename.
+const getListColumns: RequestHandler = async (req, res) => {
+    const accessToken = getToken(req);
+    if (!accessToken) {
+        res.status(401).send('Not authenticated');
+        return;
+    }
+
+    const { listId } = req.params;
+
+    try {
+        const [listInfo, fieldsData] = await Promise.all([
+            clickupGet(`/list/${listId}`, accessToken),
+            clickupGet(`/list/${listId}/field`, accessToken)
+        ]);
+
+        const columns = [
+            ...BASE_FIELDS.map(f => ({ id: f.id, title: f.title, group: 'standard' })),
+            ...(fieldsData.fields || []).map((f: any) => ({
+                id: customColumnId(f.name),
+                title: f.name,
+                group: 'custom'
+            }))
+        ];
+
+        res.json({ listName: listInfo.name || String(listId), columns });
+    } catch (error) {
+        console.error('ClickUp API error:', error);
+        res.status(500).send('API Error');
+    }
+};
+
+app.get('/api/lists/:listId/columns', getListColumns);
+
+// Export tasks from a specific list as XLSX, CSV, or JSON
 const exportListTasks: RequestHandler = async (req, res) => {
     const accessToken = getToken(req);
     if (!accessToken) {
@@ -556,7 +622,32 @@ const exportListTasks: RequestHandler = async (req, res) => {
     const { listId } = req.params;
     const { format = 'csv' } = req.query;
 
+    // Optional column selection: JSON array of column ids (base ids and cf:<name>)
+    let selectedColumns: Set<string> | null = null;
+    if (typeof req.query.columns === 'string' && req.query.columns.trim()) {
+        try {
+            const parsed = JSON.parse(req.query.columns);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                selectedColumns = new Set(parsed.map(String));
+            }
+        } catch {
+            res.status(400).send('Invalid columns parameter (expected a JSON array)');
+            return;
+        }
+    }
+    const wantBase = (id: string) => !selectedColumns || selectedColumns.has(id);
+    const wantCustom = (name: string) => !selectedColumns || selectedColumns.has(customColumnId(name));
+
     try {
+        // List name for the export filename/sheet (fall back to the id)
+        let listName = String(listId);
+        try {
+            const listInfo = await clickupGet(`/list/${listId}`, accessToken);
+            if (listInfo?.name) listName = listInfo.name;
+        } catch {
+            // non-fatal
+        }
+
         // Fetch all tasks from the list (with pagination)
         const allTasks = await fetchAllListTasks(listId, accessToken, '&include_closed=true');
 
@@ -605,32 +696,31 @@ const exportListTasks: RequestHandler = async (req, res) => {
             return flattened;
         });
 
-        if (format === 'csv') {
-            const baseFields = [
-                { id: 'id', title: 'ID' },
-                { id: 'name', title: 'Name' },
-                { id: 'description', title: 'Description' },
-                { id: 'status', title: 'Status' },
-                { id: 'priority', title: 'Priority' },
-                { id: 'assignees', title: 'Assignees' },
-                { id: 'creator', title: 'Creator' },
-                { id: 'date_created', title: 'Date Created' },
-                { id: 'date_updated', title: 'Date Updated' },
-                { id: 'due_date', title: 'Due Date' },
-                { id: 'url', title: 'URL' },
-                { id: 'tags', title: 'Tags' },
-                { id: 'time_estimate', title: 'Time Estimate' },
-                { id: 'time_spent', title: 'Time Spent' }
+        // Resolve the column set: selected base fields, plus selected custom
+        // fields (union of names across all tasks, so nothing is missed even
+        // if a field isn't registered on the list definition)
+        const baseFields = BASE_FIELDS.filter(f => wantBase(f.id));
+        const customFieldNames = new Set<string>();
+        flattenedTasks.forEach(task => {
+            Object.keys(task.custom_fields).forEach(fieldName => {
+                if (wantCustom(fieldName)) customFieldNames.add(fieldName);
+            });
+        });
+
+        const filename = `${sanitizeFilename(listName)}_${filenameTimestamp()}`;
+
+        if (format === 'xlsx') {
+            const columns = [
+                ...baseFields.map(f => ({ id: f.id, title: f.title, custom: false })),
+                ...Array.from(customFieldNames).map(name => ({ id: customColumnId(name), title: name, custom: true }))
             ];
 
-            // Add custom field names to the fields array (union across all tasks)
-            const customFieldNames = new Set<string>();
-            flattenedTasks.forEach(task => {
-                Object.keys(task.custom_fields).forEach(fieldName => {
-                    customFieldNames.add(fieldName);
-                });
-            });
+            const buffer = await buildTaskWorkbook(listName, columns, flattenedTasks);
 
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
+            res.send(buffer);
+        } else if (format === 'csv') {
             // Build the CSV in memory — no shared temp files, so concurrent
             // exports can't collide.
             const headerRow = [
@@ -645,9 +735,8 @@ const exportListTasks: RequestHandler = async (req, res) => {
 
             const csvContent = [headerRow, ...dataRows].join('\r\n');
 
-            const safeListId = String(listId).replace(/[^A-Za-z0-9_-]/g, '_');
             res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-            res.setHeader('Content-Disposition', `attachment; filename="clickup_tasks_${safeListId}.csv"`);
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
             // UTF-8 BOM so Excel decodes emoji/special characters in ClickUp
             // field names correctly instead of showing mojibake.
             res.send('\uFEFF' + csvContent);
@@ -655,6 +744,7 @@ const exportListTasks: RequestHandler = async (req, res) => {
             // Return JSON
             res.json({
                 listId,
+                listName,
                 taskCount: flattenedTasks.length,
                 tasks: flattenedTasks
             });
