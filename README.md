@@ -118,7 +118,8 @@ Then open `http://localhost:3000` (note: use a `CLICKUP_REDIRECT_URI` of `http:/
 - View title order tasks from ClickUp
 - Order sheet details modal with parcels, Title Scope, and E&Rs
 - PDF generation of the Title Report Order Sheet (LaTeX)
-- Export any ClickUp list as CSV (drill down workspace → space → folder → list)
+- Export any ClickUp list as a formatted Excel workbook or CSV (drill down
+  workspace → space → folder → list, with an optional column picker)
 - Self-imposed rate limiting and retry/backoff for ClickUp API calls
 - Dark mode interface
 - Responsive design
@@ -133,7 +134,9 @@ Then open `http://localhost:3000` (note: use a `CLICKUP_REDIRECT_URI` of `http:/
 - `/api/data` - Fetches user data
 - `/api/teams`, `/api/teams/:teamId/spaces`, `/api/spaces/:spaceId/contents`,
   `/api/folders/:folderId/lists` - Browse the ClickUp hierarchy (for export)
-- `/api/export/:listId` - Export all tasks in a list as CSV (`?format=json` for JSON)
+- `/api/lists/:listId/columns` - Available export columns for a list
+- `/api/export/:listId` - Export all tasks in a list (`?format=xlsx|csv|json`,
+  optional `columns` JSON array to select a subset)
 - `/api/rate-limit-status`, `/api/diagnostics` - Rate limiter / server diagnostics
 - `/api/health` - Health check (used by Railway)
 

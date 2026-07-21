@@ -37,11 +37,45 @@
                 <li v-if="!items.length" class="muted empty">Nothing in here.</li>
             </ul>
 
+            <div v-if="selectedList" class="options">
+                <div class="option-row">
+                    <span class="option-label">Format:</span>
+                    <label><input type="radio" value="xlsx" v-model="format" /> Excel (.xlsx)</label>
+                    <label><input type="radio" value="csv" v-model="format" /> CSV</label>
+                </div>
+                <div class="option-row">
+                    <label>
+                        <input type="checkbox" v-model="pickColumns" />
+                        Choose columns…
+                    </label>
+                </div>
+                <div v-if="pickColumns" class="column-picker">
+                    <div v-if="columnsError" class="error">
+                        {{ columnsError }} <button @click="loadColumns">Retry</button>
+                    </div>
+                    <div v-else-if="columnsLoading" class="muted">Loading columns…</div>
+                    <template v-else>
+                        <div class="column-actions">
+                            <button @click="selectedColumnIds = availableColumns.map(c => c.id)">All</button>
+                            <button @click="selectedColumnIds = []">None</button>
+                            <span class="muted">{{ selectedColumnIds.length }} of {{ availableColumns.length }} selected</span>
+                        </div>
+                        <div class="column-list">
+                            <label v-for="col in availableColumns" :key="col.id" class="column-item">
+                                <input type="checkbox" :value="col.id" v-model="selectedColumnIds" />
+                                {{ col.title }}
+                                <span v-if="col.group === 'custom'" class="badge">custom</span>
+                            </label>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
             <div class="actions">
                 <button
                     class="action-button"
-                    :disabled="!selectedList || exporting"
-                    @click="exportCsv"
+                    :disabled="!selectedList || exporting || (pickColumns && !selectedColumnIds.length)"
+                    @click="doExport"
                 >
                     {{ exportLabel }}
                 </button>
@@ -80,10 +114,41 @@ const error = ref('');
 const exporting = ref(false);
 const exportError = ref('');
 
+// Export options
+const format = ref<'xlsx' | 'csv'>('xlsx');
+const pickColumns = ref(false);
+interface ColumnInfo { id: string; title: string; group: 'standard' | 'custom'; }
+const availableColumns = ref<ColumnInfo[]>([]);
+const selectedColumnIds = ref<string[]>([]);
+const columnsLoading = ref(false);
+const columnsError = ref('');
+
 const exportLabel = computed(() => {
     if (exporting.value) return 'Exporting…';
-    if (selectedList.value) return `Export "${selectedList.value.name}" as CSV`;
+    if (selectedList.value) return `Export "${selectedList.value.name}" as ${format.value.toUpperCase()}`;
     return 'Select a list to export';
+});
+
+const loadColumns = async () => {
+    if (!selectedList.value) return;
+    columnsLoading.value = true;
+    columnsError.value = '';
+    try {
+        const { data } = await axios.get(`${API_URL}/api/lists/${selectedList.value.id}/columns`);
+        availableColumns.value = data.columns || [];
+        selectedColumnIds.value = availableColumns.value.map(c => c.id);
+    } catch (err) {
+        console.error('Error loading columns:', err);
+        columnsError.value = 'Could not load the column list.';
+    } finally {
+        columnsLoading.value = false;
+    }
+};
+
+watch(pickColumns, (on) => {
+    if (on && selectedList.value && !availableColumns.value.length) {
+        loadColumns();
+    }
 });
 
 // Each level is fetched lazily, only when the user drills into it
@@ -117,12 +182,23 @@ const loadCurrentLevel = async () => {
     }
 };
 
+const resetColumnState = () => {
+    pickColumns.value = false;
+    availableColumns.value = [];
+    selectedColumnIds.value = [];
+    columnsError.value = '';
+};
+
 const pick = (item: Node) => {
     if (item.type === 'list') {
-        selectedList.value = item;
+        if (selectedList.value?.id !== item.id) {
+            selectedList.value = item;
+            resetColumnState();
+        }
         return;
     }
     selectedList.value = null;
+    resetColumnState();
     path.value = [...path.value, item];
     loadCurrentLevel();
 };
@@ -130,25 +206,45 @@ const pick = (item: Node) => {
 // Breadcrumb navigation: 0 = workspace root, i+1 = path[i]
 const navigateTo = (depth: number) => {
     selectedList.value = null;
+    resetColumnState();
     path.value = path.value.slice(0, depth);
     loadCurrentLevel();
 };
 
-const exportCsv = async () => {
+// "List Name_2026-07-21_14-35-09.xlsx" in the user's local time
+const exportFilename = (listName: string, ext: string): string => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+        `_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+    const safeName = listName.replace(/[\\/:*?"<>|]/g, '_').trim() || 'export';
+    return `${safeName}_${stamp}.${ext}`;
+};
+
+const doExport = async () => {
     if (!selectedList.value) return;
     exporting.value = true;
     exportError.value = '';
     try {
+        const params: Record<string, string> = { format: format.value };
+        // Only send a column list when it's actually a subset
+        if (pickColumns.value &&
+            selectedColumnIds.value.length &&
+            selectedColumnIds.value.length < availableColumns.value.length) {
+            params.columns = JSON.stringify(selectedColumnIds.value);
+        }
+
         const response = await axios.get(
             `${API_URL}/api/export/${selectedList.value.id}`,
-            { responseType: 'blob' }
+            { params, responseType: 'blob' }
         );
 
-        const contentDisposition = response.headers['content-disposition'];
-        const filenameMatch = contentDisposition && contentDisposition.match(/filename="(.+)"/);
-        const filename = filenameMatch ? filenameMatch[1] : `clickup_tasks_${selectedList.value.id}.csv`;
+        const mime = format.value === 'xlsx'
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'text/csv';
+        const filename = exportFilename(selectedList.value.name, format.value);
 
-        const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
+        const url = window.URL.createObjectURL(new Blob([response.data], { type: mime }));
         const link = document.createElement('a');
         link.href = url;
         link.setAttribute('download', filename);
@@ -175,6 +271,7 @@ watch(() => props.isOpen, (open) => {
         path.value = [];
         selectedList.value = null;
         exportError.value = '';
+        resetColumnState();
         loadCurrentLevel();
     }
 });
@@ -294,6 +391,92 @@ watch(() => props.isOpen, (open) => {
 
 .error {
     color: #ff6b6b;
+}
+
+.options {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background-color: #202020;
+}
+
+.option-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+}
+
+.option-row:last-child {
+    margin-bottom: 0;
+}
+
+.option-label {
+    color: #999;
+}
+
+.option-row label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+}
+
+.column-picker {
+    margin-top: 0.5rem;
+}
+
+.column-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.column-actions button {
+    background-color: #333;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.column-actions button:hover {
+    background-color: #444;
+}
+
+.column-list {
+    max-height: 30vh;
+    overflow-y: auto;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.15rem 1rem;
+}
+
+.column-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.badge {
+    font-size: 0.7rem;
+    color: #999;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 0 0.3rem;
 }
 
 .actions {
