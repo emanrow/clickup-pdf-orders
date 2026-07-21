@@ -40,6 +40,9 @@ Notes:
   (parcel) tasks appear on an order sheet, by ClickUp status label. Unset →
   defaults to `to order`. Set to a comma-separated list to allow multiple
   statuses, or to an empty string to disable the filter entirely.
+- `EXPORT_TIMEZONE` (optional) is the IANA timezone (e.g. `America/Chicago`)
+  used to render date/time values in exports; defaults to UTC. Excel cells
+  are timezone-naive, so this determines the wall-clock times shown.
 - `PORT` is provided by Railway automatically; don't set it.
 - `FRONTEND_URL` should **not** be set in production — leaving it unset makes the backend use same-origin redirects and skip CORS, since it serves the frontend itself.
 

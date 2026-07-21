@@ -6,7 +6,8 @@ import axios from 'axios';
 import cookieParser from 'cookie-parser';
 import { generatePdf } from './generatePdf.js';
 import { rateLimiter } from './rateLimiter.js';
-import { buildTaskWorkbook } from './exportXlsx.js';
+import { buildTaskWorkbook, flattenCustomField } from './exportXlsx.js';
+import type { ExportCell } from './exportXlsx.js';
 import fs from 'fs';
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -673,23 +674,15 @@ const exportListTasks: RequestHandler = async (req, res) => {
                 tags: task.tags?.map((t: any) => t.name).join(', ') || '',
                 time_estimate: task.time_estimate || '',
                 time_spent: task.time_spent || '',
-                custom_fields: {} as Record<string, string>
+                custom_fields: {} as Record<string, ExportCell>
             };
 
-            // Add custom fields
+            // Convert custom fields using their declared ClickUp types, so
+            // dates/currency/numbers export as real values instead of raw
+            // epoch-millisecond strings.
             if (task.custom_fields) {
                 task.custom_fields.forEach((field: any) => {
-                    let value = '';
-                    if (field.value !== null && field.value !== undefined) {
-                        if (Array.isArray(field.value)) {
-                            value = field.value.map((v: any) => v.name || v).join(', ');
-                        } else if (typeof field.value === 'object') {
-                            value = field.value.name || field.value.formatted_address || JSON.stringify(field.value);
-                        } else {
-                            value = String(field.value);
-                        }
-                    }
-                    flattened.custom_fields[field.name] = value;
+                    flattened.custom_fields[field.name] = flattenCustomField(field);
                 });
             }
 
@@ -730,7 +723,7 @@ const exportListTasks: RequestHandler = async (req, res) => {
 
             const dataRows = flattenedTasks.map(task => [
                 ...baseFields.map(f => csvEscape(task[f.id])),
-                ...Array.from(customFieldNames).map(name => csvEscape(task.custom_fields[name] ?? ''))
+                ...Array.from(customFieldNames).map(name => csvEscape(task.custom_fields[name]?.text ?? ''))
             ].join(','));
 
             const csvContent = [headerRow, ...dataRows].join('\r\n');
@@ -741,12 +734,18 @@ const exportListTasks: RequestHandler = async (req, res) => {
             // field names correctly instead of showing mojibake.
             res.send('\uFEFF' + csvContent);
         } else {
-            // Return JSON
+            // Return JSON (custom fields as their display text)
             res.json({
                 listId,
                 listName,
                 taskCount: flattenedTasks.length,
-                tasks: flattenedTasks
+                tasks: flattenedTasks.map(task => ({
+                    ...task,
+                    custom_fields: Object.fromEntries(
+                        Object.entries(task.custom_fields as Record<string, ExportCell>)
+                            .map(([name, cell]) => [name, cell.text])
+                    )
+                }))
             });
         }
 
