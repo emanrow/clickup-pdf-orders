@@ -36,6 +36,10 @@ COOKIE_SECRET=some_long_random_string
 
 Notes:
 - `COOKIE_SECRET` signs the per-user auth cookies — set it to a long random value (e.g. `openssl rand -hex 32`).
+- `TITLEORDER_ALLOWED_STATUSES` (optional) filters which linked title report
+  (parcel) tasks appear on an order sheet, by ClickUp status label. Unset →
+  defaults to `to order`. Set to a comma-separated list to allow multiple
+  statuses, or to an empty string to disable the filter entirely.
 - `PORT` is provided by Railway automatically; don't set it.
 - `FRONTEND_URL` should **not** be set in production — leaving it unset makes the backend use same-origin redirects and skip CORS, since it serves the frontend itself.
 
@@ -114,6 +118,8 @@ Then open `http://localhost:3000` (note: use a `CLICKUP_REDIRECT_URI` of `http:/
 - View title order tasks from ClickUp
 - Order sheet details modal with parcels, Title Scope, and E&Rs
 - PDF generation of the Title Report Order Sheet (LaTeX)
+- Export any ClickUp list as CSV (drill down workspace → space → folder → list)
+- Self-imposed rate limiting and retry/backoff for ClickUp API calls
 - Dark mode interface
 - Responsive design
 
@@ -125,6 +131,10 @@ Then open `http://localhost:3000` (note: use a `CLICKUP_REDIRECT_URI` of `http:/
 - `/api/ordersheet/:taskId/full` - Full order sheet data (parcels, scopes)
 - `/api/generate-pdf` - Generates and downloads the order sheet PDF
 - `/api/data` - Fetches user data
+- `/api/teams`, `/api/teams/:teamId/spaces`, `/api/spaces/:spaceId/contents`,
+  `/api/folders/:folderId/lists` - Browse the ClickUp hierarchy (for export)
+- `/api/export/:listId` - Export all tasks in a list as CSV (`?format=json` for JSON)
+- `/api/rate-limit-status`, `/api/diagnostics` - Rate limiter / server diagnostics
 - `/api/health` - Health check (used by Railway)
 
 ## Contributing
