@@ -69,7 +69,7 @@
       </template>
 
       <div class="tools">
-        <button @click="isExportOpen = true">📋 Export a ClickUp list as CSV</button>
+        <button @click="isExportOpen = true">📋 Export a ClickUp list (Excel/CSV)</button>
       </div>
     </section>
 
