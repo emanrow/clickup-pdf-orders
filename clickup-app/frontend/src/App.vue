@@ -7,12 +7,10 @@
       </p>
     </header>
 
-    <!-- Checking session -->
     <section v-if="authState === 'checking'" class="panel">
       <p class="muted">Checking your session…</p>
     </section>
 
-    <!-- Logged out: walkthrough + login -->
     <section v-else-if="authState === 'loggedOut'" class="panel">
       <h2>How it works</h2>
       <ol class="steps">
@@ -37,7 +35,6 @@
       <p v-if="authError" class="error">{{ authError }}</p>
     </section>
 
-    <!-- Logged in: pick an order -->
     <section v-else class="panel">
       <p class="signed-in">
         Signed in as <strong>{{ username || 'ClickUp user' }}</strong>
@@ -66,17 +63,24 @@
 
       <template v-else>
         <p class="muted">
-          No Title Orders found{{ tasksError ? ` — ${tasksError}` : '.' }}
+          No Title Orders found{{ tasksError ? ' — ' + tasksError : '.' }}
         </p>
         <button @click="loadTasks">⟳ Try again</button>
       </template>
+
+      <div class="tools">
+        <button @click="isExportOpen = true">📋 Export a ClickUp list as CSV</button>
+      </div>
     </section>
 
-    <!-- Modal -->
     <TaskModal
       :is-open="isModalOpen"
       :task="selectedTaskObject"
       @close="closeModal"
+    />
+    <ExportModal
+      :is-open="isExportOpen"
+      @close="isExportOpen = false"
     />
   </div>
 </template>
@@ -85,6 +89,7 @@
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import TaskModal from './components/TaskModal.vue';
+import ExportModal from './components/ExportModal.vue';
 import { API_URL } from './config.js';
 
 const authState = ref<'checking' | 'loggedOut' | 'loggedIn'>('checking');
@@ -98,6 +103,7 @@ const tasksError = ref('');
 const selectedTaskId = ref('');
 const selectedTaskObject = ref<any>(null);
 const isModalOpen = ref(false);
+const isExportOpen = ref(false);
 
 const authenticate = () => {
   window.location.href = `${API_URL}/api/auth`;
@@ -231,6 +237,13 @@ onMounted(async () => {
 .hint {
   color: #888;
   font-size: 0.9rem;
+}
+
+.tools {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #333;
+  text-align: center;
 }
 
 .muted {

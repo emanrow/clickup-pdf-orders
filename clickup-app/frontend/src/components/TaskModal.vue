@@ -48,8 +48,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import axios from 'axios';
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import { API_URL } from '../config.js';
 
 
@@ -131,6 +129,7 @@ const generatePDF = async () => {
         const response = await axios.post(
             `${API_URL}/api/generate-pdf`,
             {
+                taskId: orderData.value.orderTask.id,
                 title: orderData.value.orderTask.name,
                 date_ordered: formatDate(getCustomField("📅 Date Ordered")),
                 titleScopeNames,
