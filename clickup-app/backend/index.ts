@@ -594,13 +594,25 @@ const getListColumns: RequestHandler = async (req, res) => {
             clickupGet(`/list/${listId}/field`, accessToken)
         ]);
 
-        const columns = [
-            ...BASE_FIELDS.map(f => ({ id: f.id, title: f.title, group: 'standard' })),
-            ...(fieldsData.fields || []).map((f: any) => ({
+        // ClickUp allows distinct fields (defined at different levels) to
+        // share a display name; exports merge them into one column, so the
+        // picker must dedupe by name too.
+        const seenCustom = new Set<string>();
+        const customColumns = (fieldsData.fields || [])
+            .filter((f: any) => {
+                if (seenCustom.has(f.name)) return false;
+                seenCustom.add(f.name);
+                return true;
+            })
+            .map((f: any) => ({
                 id: customColumnId(f.name),
                 title: f.name,
                 group: 'custom'
-            }))
+            }));
+
+        const columns = [
+            ...BASE_FIELDS.map(f => ({ id: f.id, title: f.title, group: 'standard' })),
+            ...customColumns
         ];
 
         res.json({ listName: listInfo.name || String(listId), columns });
@@ -679,10 +691,15 @@ const exportListTasks: RequestHandler = async (req, res) => {
 
             // Convert custom fields using their declared ClickUp types, so
             // dates/currency/numbers export as real values instead of raw
-            // epoch-millisecond strings.
+            // epoch-millisecond strings. Same-named fields (defined at
+            // different levels) merge into one column, keeping whichever
+            // actually has a value.
             if (task.custom_fields) {
                 task.custom_fields.forEach((field: any) => {
-                    flattened.custom_fields[field.name] = flattenCustomField(field);
+                    const existing = flattened.custom_fields[field.name];
+                    if (!existing || existing.text === '') {
+                        flattened.custom_fields[field.name] = flattenCustomField(field);
+                    }
                 });
             }
 
