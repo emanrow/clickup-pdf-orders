@@ -13,7 +13,7 @@
                     <tr><td><strong>Title Scope:</strong></td><td>{{ formatArray(orderData.titleScopeDescriptions) }}</td></tr>
                     <tr><td><strong>E&Rs:</strong></td><td>{{ formatArray(orderData.erScopeDescriptions) }}</td></tr>
                     <tr><td><strong>Delivery Email:</strong></td><td>{{ getCustomField('📨 Delivery email') }}</td></tr>
-                    <tr><td><strong>Include Property Profile?</strong></td><td>{{ getCustomField('🗺️ Include Property Profile Report?') ? 'Yes' : 'No' }}</td></tr>
+                    <tr><td><strong>Include Property Profile?</strong></td><td>{{ includePropertyProfileLabel }}</td></tr>
                     <tr><td><strong>Delivery Instructions:</strong></td><td>{{ getCustomField('Delivery Instructions') }}</td></tr>
                 </tbody>
                 </table>
@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import axios from 'axios';
 import { API_URL } from '../config.js';
 
@@ -77,8 +77,32 @@ const close = () => {
     orderData.value = null;
 };
 
+// ClickUp custom field names on the order task. Kept here so a rename in
+// ClickUp only has to be fixed in one place.
+const PROPERTY_PROFILE_FIELD = '🗺️ Include Property Profile Report?';
+
+const findOrderField = (name: string) =>
+    orderData.value?.orderTask?.custom_fields.find((f: any) => f.name.includes(name.trim()));
+
+/**
+ * Reads a ClickUp checkbox custom field as a real boolean.
+ *
+ * Gotcha: the ClickUp API sends checkbox values as the strings "true"/"false",
+ * and omits the value entirely when the box was never touched. Both "false"
+ * and the "—" placeholder that getCustomField returns for missing values are
+ * truthy, so a plain truthiness check reads every unchecked box as checked.
+ */
+const isCheckboxChecked = (name: string): boolean => {
+    const value = findOrderField(name)?.value;
+    return value === true || value === 'true';
+};
+
+const includePropertyProfileLabel = computed(() =>
+    isCheckboxChecked(PROPERTY_PROFILE_FIELD) ? 'Yes' : 'No'
+);
+
 const getCustomField = (name: string) => {
-    const field = orderData.value?.orderTask?.custom_fields.find((f: any) => f.name.includes(name.trim()));
+    const field = findOrderField(name);
 
     if (!field || field.value === undefined || field.value === null) return "—";
 
@@ -136,7 +160,7 @@ const generatePDF = async () => {
                 titleScopeDescriptions: orderData.value.titleScopeDescriptions,
                 erScopeNames,
                 erScopeDescriptions: orderData.value.erScopeDescriptions,
-                include_property_profile: getCustomField("🗺️ Include Property Profile Report?") ? "Yes" : "No",
+                include_property_profile: includePropertyProfileLabel.value,
                 delivery_instructions: getCustomField("Delivery Instructions"),
                 delivery_email: getCustomField("📨 Delivery email"),
                 parcels: orderData.value.parcels.map(parcel => ({
